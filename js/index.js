@@ -22,12 +22,8 @@ let hoverObject;
 function init() {
     renderer = new THREE.WebGLRenderer({ 
         alpha: true, 
-        antialias: true,
-        powerPreference: "high-performance",
-        precision: "highp"
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
     camera.position.z = 1;
@@ -36,7 +32,7 @@ function init() {
     topLight.position.set(0, 500, 500);
     scene.add(topLight);
 
-    controls = new OrbitControls(camera, renderer.domElement);
+    // controls = new OrbitControls(camera, renderer.domElement);
 
     loadModel();
 
@@ -68,9 +64,6 @@ function loadModel() {
             // scene.add(hoverObject);
             
             // Adjust camera
-            const distance = 1.5 / Math.tan((camera.fov * Math.PI) / 360);
-            camera.position.z = distance;
-            
             animate();
         },
         function (xhr) {
@@ -83,21 +76,38 @@ function loadModel() {
 }
 
 function animate() {
+    object.rotation.y += 0.005;
+
+    // update the picking ray with the camera and pointer position
+	raycaster.setFromCamera( pointer, camera );
+
+	// calculate objects intersecting the picking ray
+	const intersects = raycaster.intersectObjects( scene.children );
+
+	for ( let i = 0; i < intersects.length; i ++ ) {
+
+        console.log("HOVERED")
+	}
+
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
 }
 
 function onPointerMove(event) {
-    pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-    pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    console.log(scene.children);
+    // console.log('clicked');
+	// pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+	// pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
+    // console.log(pointer);
     
-    raycaster.setFromCamera(pointer, camera);
-    if (object) {
-        const intersects = raycaster.intersectObject(object);
-        if (intersects.length > 0) {
-            console.log('hovered');
-        }
-    }
+    // raycaster.setFromCamera(pointer, camera);
+    // if (object) {
+    //     const intersects = raycaster.intersectObjects(scene.children);
+    //     console.log(intersects);
+    //     if (intersects.length > 0) {
+    //         console.log('hovered');
+    //     }
+    // }
 }
 
 function onWindowResize() {
