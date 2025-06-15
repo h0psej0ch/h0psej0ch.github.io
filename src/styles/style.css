@@ -1,0 +1,63 @@
+body {
+    margin: 0;
+    background-color: #24273a;
+}
+
+header {
+    position: absolute;
+    width: 100%;
+    margin-top: 3em;
+    text-align: center;
+    color: white;
+    font-size: 2em;
+    font-weight: 900;
+    z-index: 1;
+}
+
+#three-canvas {
+    height: 100vh !important;
+    width: 100vw !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    visibility: hidden;
+}
+
+.construction {
+    width: 100%;
+    display: none;
+    z-index: 99;
+}
+
+.lower {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+}
+
+.loading-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #cad3f5;
+    background-color: #24273a;
+    font-size: 2em;
+    font-weight: 900;
+    z-index: 1;
+    font-family: monospace ;
+}
+
+.loading-text {
+    white-space: pre;
+}
+
+.pacman {
+    color: #eed49f;
+} 
+
+#loading-percentage {
+    color: #a6da95;
+}

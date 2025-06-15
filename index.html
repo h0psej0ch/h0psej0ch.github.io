@@ -3,15 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <title>h0psej0ch</title>
-    <link rel="stylesheet" type="text/css" href="styles/index.css">
+    <link rel="stylesheet" type="text/css" href="/src/styles/style.css">
 </head>
 <body>
-    <header>Welcome to the Portfolio of h0psej0ch</header>
+    <!-- <header>Welcome to the Portfolio of h0psej0ch</header> -->
 
     <main>
-        <div id="model"></div>
+        <img src="/src/images/construction.svg" alt="UNDER CONSTRUCTION" class="construction upper hidden" />
+        <div class="loading-container">
+            <p class="loading-text">
+╔ Loading ════════════════╗
+║<a id="loading-text">  • • • • • • • • • </a><a id="loading-percentage">  0%</a> ║
+╚═════════════════════════╝</p>
+        </div>
+        <canvas id="three-canvas"></canvas>
+        <img src="/src/images/construction.svg" alt="UNDER CONSTRUCTION" class="construction lower hidden" />
     </main>
 
-    <script type="module" src="js/index.js"></script>
+    <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

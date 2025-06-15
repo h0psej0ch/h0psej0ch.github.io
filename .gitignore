@@ -1,0 +1,8 @@
+# Build stuff
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+.github
