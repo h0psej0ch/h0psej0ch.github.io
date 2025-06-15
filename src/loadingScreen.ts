@@ -12,11 +12,7 @@ export class loadingScreen {
     constructor() {
         this.loadPercentage = 0;
         
-        for (let i = 0; i <= 101; i++) {
-            setTimeout(() => {
-                this.set_load_percentage(i);
-            }, i * 25);
-        }
+        this.set_load_percentage(0);
     }
 
     private replace_c(text_value: string, C: char, index: int): string {
@@ -24,15 +20,15 @@ export class loadingScreen {
         return text_value;
     }
 
-    private set_load_percentage(percent: number) {
-        if (percent == 101 && this.loadPercentage == 100) {
+    private set_load_percentage(func_percent: number) {
+        if (func_percent >= 100 && this.loadPercentage == 100) {
             console.log(text);
             text.offsetParent.style.display = "none";
             canvas.style.visibility = "visible";
             console.log(canvas);
             return;
         }
-        percent = Math.min(percent, this.loadPercentage);
+        var percent = Math.min(func_percent, this.loadPercentage);
         var progress = Math.ceil(38 * (percent / 100)); 
         var C = progress % 2 == 0 ? "C" : "c";
         progress = Math.ceil(progress / 2);
@@ -44,6 +40,10 @@ export class loadingScreen {
         }
         text.innerHTML = text_value;
         loading_percentage_text.innerHTML = String(percent).padStart(3, ' ') + "%";
+        setTimeout(() => {
+            console.log("timeout triggered");
+            this.set_load_percentage(func_percent+1);
+        }, 25);
     }
 
 }

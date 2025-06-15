@@ -95,7 +95,7 @@ export class threeScene {
             },
             (xhr) => {
                 loading_screen.loadPercentage = Math.floor((xhr.loaded / xhr.total) * 100);
-                // console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
 
             },
             function (error) {
