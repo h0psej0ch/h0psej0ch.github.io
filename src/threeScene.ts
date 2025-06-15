@@ -75,7 +75,7 @@ export class threeScene {
     private load3DContent(loading_screen: loadingScreen): void {
         const loader = new GLTFLoader();
         loader.load(
-            '/src/models/' + MODEL,
+            '/models/' + MODEL,
             (gltf) => {
                 this.mainObject = gltf.scene;
                 this.mainObject.rotation.y = Math.PI / 2;
