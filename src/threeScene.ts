@@ -3,21 +3,30 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment';
+import { PMREMGenerator } from 'three';
 
-const BACKGROUND: THREE.Color   = new THREE.Color(0x24273a);
-const MODEL: string             = "Guitar/Guitar.glb"; 
+const BACKGROUND: THREE.Color           = new THREE.Color(0x24273a);
+const MODEL: string                     = "scene.glb"; 
+const HIGHLIGHTS: Array<string>         = ["Guitar", "Plimpoes", "Tree"];
+const IDLE_ANIMATIONS: Array<string>    = ["TurnHead"];
 
 export class threeScene {
     private canvas: HTMLCanvasElement;
+    private camera: THREE.Camera;
     private raycaster: THREE.Raycaster;
     private mouse: THREE.Vector2;
     private scene: THREE.Scene;
     private renderer: THREE.WebGLRenderer;
-    private mainObject: THREE.Object;
-    private outline: THREE.OutlinePass;
-    private composer: THREE.EffectComposer;
+    private pmremGenerator: THREE.PMREMGenerator;
+    private mainObject: THREE.Object3D;
+    private outlinePass: OutlinePass;
+    private composer: EffectComposer;
+    private highlightObjects: Array<number>;
+    private animations: Map<string, THREE.AnimationAction>;
+    private mixer: THREE.AnimationMixer;
+    private clock: THREE.Clock;
 
     constructor(loading_screen: loadingScreen) {
         this.canvas = document.getElementById("three-canvas");
@@ -25,12 +34,11 @@ export class threeScene {
         this.mouse = new THREE.Vector2();
 
         this.initThreeJS();
-
         this.load3DContent(loading_screen);
         this.setupOutline();
-
         this.onMouseMovement();
         this.onWindowResize();
+        this.clock = new THREE.Clock();
     }
 
     private initThreeJS(): void {
@@ -38,8 +46,10 @@ export class threeScene {
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
         this.camera.position.x = 0;
-        this.camera.position.y = 0;
-        this.camera.position.z = 1.5;
+        this.camera.position.y = 0.5;
+        this.camera.position.z = 1.25;
+
+        this.camera.rotation.x = - Math.PI / 8;
         
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
@@ -47,29 +57,24 @@ export class threeScene {
             alpha: true
         });
 
-        const environment = new RoomEnvironment( this.renderer );
-        const pmremGenerator = new THREE.PMREMGenerator( this.renderer );
-        this.scene.environment = pmremGenerator.fromScene( environment ).texture;
-        this.scene.environmentIntensity = 1.5;
-        
-        this.renderer.setClearColor(0x000000, 0);
+        this.pmremGenerator = new PMREMGenerator(this.renderer);
+        this.pmremGenerator.compileEquirectangularShader();
+
+        // Create neutral environment similar to reference
+        const environment = new RoomEnvironment();
+        const envTexture = this.pmremGenerator.fromScene(environment).texture;
+        this.scene.environment = envTexture;
+        this.scene.environmentIntensity = 0.3;
 
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-        // Remove or reduce your current directional light
-        const topLight = new THREE.DirectionalLight(0xffffff, 0.3); // Reduced intensity
-        topLight.position.set(5, 5, 5);
-        this.scene.add(topLight);
+        // Config renderer so things look better
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.toneMappingExposure = 0;
 
-        // Add ambient light for base illumination
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
-        this.scene.add(ambientLight);
-
-        // Add a second directional light from different angle
-        const sideLight = new THREE.DirectionalLight(0xffffff, 0.2);
-        sideLight.position.set(-5, 0, 5);
-        this.scene.add(sideLight);
+        this.setupLights(); 
     }
 
     private load3DContent(loading_screen: loadingScreen): void {
@@ -78,9 +83,35 @@ export class threeScene {
             '/models/' + MODEL,
             (gltf) => {
                 this.mainObject = gltf.scene;
-                this.mainObject.rotation.y = Math.PI / 2;
-                this.mainObject.rotation.z = Math.PI / 2;
+                this.mainObject.rotation.y = - Math.PI / 4;
+                //this.mainObject.rotation.z = Math.PI / 2;
+                //this.mainObject.rotation.x = Math.PI / 2;
                 this.scene.add(this.mainObject);
+
+                this.mixer = new THREE.AnimationMixer(this.mainObject);
+                this.animations = new Map<string, THREE.AnimationAction>(gltf.animations.map((value: THREE.AnimationAction) => [value.name, this.mixer.clipAction(value)]));
+                console.log(this.animations);
+                const sitDown = this.animations.get("Standup");
+                sitDown.timeScale = -1;
+                sitDown.clampWhenFinished = true;
+                sitDown.repetitions = 1;
+                console.log(sitDown.getClip().duration);
+                
+                this.highlightObjects = [];
+                console.log(this.mainObject);
+                console.log(this.mainObject.children);
+                this.mainObject.children.forEach((obj) => {
+                    if (HIGHLIGHTS.includes(obj.name)) {
+                        this.highlightObjects.push(obj.id);
+                    }
+                    if (obj.isMesh) {
+                        console.log("hjehe");
+                        obj.castShadow = true;
+                        obj.receiveShadow = true;
+                    }
+                });
+
+                console.log(this.highlightObjects);
 
                 // Center and scale the model
                 const box = new THREE.Box3().setFromObject(this.mainObject);
@@ -91,10 +122,19 @@ export class threeScene {
                 this.mainObject.scale.setScalar(scale);
                 this.mainObject.position.sub(center.multiplyScalar(scale));
 
-                this.animate();
+
+                loading_screen.set_done().then(() => {
+                    console.log("fdsa");
+                    sitDown.play();
+                    this.idleAnimation();
+                    this.animate();
+                });
+
             },
             (xhr) => {
                 loading_screen.loadPercentage = Math.floor((xhr.loaded / xhr.total) * 100);
+                console.log("Loaded: " + xhr.loaded);
+                console.log("Total:  " + xhr.total);
                 console.log((xhr.loaded / xhr.total * 100) + '% loaded');
 
             },
@@ -105,10 +145,12 @@ export class threeScene {
     }
 
     private setupOutline(): void {
+        // Setup composer/renderPass
         this.composer = new EffectComposer(this.renderer);
         const renderPass = new RenderPass(this.scene, this.camera);
         this.composer.addPass(renderPass);
 
+        // OutlinePass for the outline on highlighted objects
         this.outlinePass = new OutlinePass(
             new THREE.Vector2(window.innerWidth, window.innerHeight),
             this.scene,
@@ -118,8 +160,37 @@ export class threeScene {
         this.outlinePass.edgeGlow = 1;
         this.outlinePass.edgeThickness = 1;
         this.outlinePass.pulsePeriod = 0;
-        this.outlinePass.visibleEdgeColor.set('#ff0000');
+        this.outlinePass.visibleEdgeColor.set('#ffffff');
         this.composer.addPass(this.outlinePass);
+
+        // OutputPass
+        const outputPass = new OutputPass();
+        this.composer.addPass(outputPass);
+    }
+
+    private setupLights(): void {
+        const light1 = new THREE.AmbientLight(0xffffff, 0.3);
+        light1.name = 'ambient_light';
+        this.scene.add(light1);
+
+        const light2 = new THREE.DirectionalLight(0xffffff, 2.5);
+        light2.position.set(0.5, 0, 0.866); // ~60º
+        light2.name = 'main_light';
+        this.scene.add(light2);
+    }
+
+    private idleAnimation() {
+        const delay = 1000 * (Math.random() * 10 + 5)
+        setTimeout(() => {
+            const anim = IDLE_ANIMATIONS[Math.floor(Math.random() * IDLE_ANIMATIONS.length)]
+            const action = this.animations.get(anim);
+            action.repetitions = 1;
+            action.reset(); // Reset the action to allow it to play again
+            action.play();
+            this.idleAnimation();
+        }, delay);
+
+        console.log("animation in " + delay);
     }
 
     private onMouseMovement(): void {
@@ -128,12 +199,15 @@ export class threeScene {
 
             this.mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
 	        this.mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+
+            this.mainObject.rotation.y = (- Math.PI / 4) + (this.mouse.x * (Math.PI / 4));
              
             this.raycaster.setFromCamera(this.mouse, this.camera);
 
             const intersects = this.raycaster.intersectObjects(this.scene.children, true);
             if (intersects.length > 0) {
-                this.outlinePass.selectedObjects = [this.mainObject]
+                this.outlinePass.selectedObjects = intersects.map(value => this.parentObject(value.object)).filter(value => this.highlightObjects.includes(value.id));
             } else {
                 this.outlinePass.selectedObjects = []
             }
@@ -141,16 +215,35 @@ export class threeScene {
         });
     }
 
+    private parentObject(obj: THREE.Object3D): THREE.Object3D {
+        if (obj.parent == this.mainObject) {
+            return obj;
+        } else {
+            return this.parentObject(obj.parent);
+        }
+    }
+
     private onWindowResize() {
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Update effect composer and outline pass size
+            this.composer.setSize(window.innerWidth, window.innerHeight);
+            this.outlinePass.resolution.set(window.innerWidth, window.innerHeight);
         });
     }
 
     private animate = (): void => {
+        const delta = this.clock.getDelta();
+        
+        // Update the animation mixer
+        if (this.mixer) {
+            this.mixer.update(delta);
+        }
+        
+        this.composer.render();
         requestAnimationFrame(this.animate);
-        this.composer.render(this.scene, this.camera);
     };
 }

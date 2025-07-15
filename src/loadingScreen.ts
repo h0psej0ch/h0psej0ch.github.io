@@ -8,6 +8,9 @@ const load_text: string = " • • • • • • • • •";
 export class loadingScreen {
 
     public loadPercentage: number
+    private done: boolean = false;
+    private animationComplete: boolean = false;
+    private resolveComplete: (() => void) | null = null;
 
     constructor() {
         this.loadPercentage = 0;
@@ -15,17 +18,21 @@ export class loadingScreen {
         this.set_load_percentage(0);
     }
 
-    private replace_c(text_value: string, C: char, index: int): string {
+    private replace_c(text_value: string, C: char, index: number): string {
         text_value = text_value.substring(0, index) + '<a class="pacman">' + C + '</a>' + text_value.substring(index + 1, text_value.length);
         return text_value;
     }
 
     private set_load_percentage(func_percent: number) {
-        if (func_percent >= 100 && this.loadPercentage == 100) {
+        if (func_percent >= 100 && this.done) {
             console.log(text);
             text.offsetParent.style.display = "none";
             canvas.style.visibility = "visible";
             console.log(canvas);
+            this.animationComplete = true;
+            if (this.resolveComplete) {
+                this.resolveComplete();
+            }
             return;
         }
         var percent = Math.min(func_percent, this.loadPercentage);
@@ -46,4 +53,17 @@ export class loadingScreen {
         }, 25);
     }
 
+    public async set_done(): Promise<void> {
+        this.done = true;
+        
+        // If animation is already complete, resolve immediately
+        if (this.animationComplete) {
+            return Promise.resolve();
+        }
+        
+        // Otherwise, wait for animation to complete
+        return new Promise<void>((resolve) => {
+            this.resolveComplete = resolve;
+        });
+    }
 }
