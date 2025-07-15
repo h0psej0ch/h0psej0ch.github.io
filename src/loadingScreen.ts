@@ -1,6 +1,6 @@
-const text: HTMLElement = document.getElementById("loading-text");
-const loading_percentage_text: HTMLElement = document.getElementById("loading-percentage");
-const canvas: HTMLElement = document.getElementById("three-canvas");
+const text: HTMLAnchorElement = document.getElementById("loading-text") as HTMLAnchorElement;
+const loading_percentage_text: HTMLElement = document.getElementById("loading-percentage")!;
+const canvas: HTMLElement = document.getElementById("three-canvas")!;
 
 const name_text: string = "Tristan Bottenberg";
 const load_text: string = " • • • • • • • • •";
@@ -18,7 +18,7 @@ export class loadingScreen {
         this.set_load_percentage(0);
     }
 
-    private replace_c(text_value: string, C: char, index: number): string {
+    private replace_c(text_value: string, C: string, index: number): string {
         text_value = text_value.substring(0, index) + '<a class="pacman">' + C + '</a>' + text_value.substring(index + 1, text_value.length);
         return text_value;
     }
@@ -26,7 +26,8 @@ export class loadingScreen {
     private set_load_percentage(func_percent: number) {
         if (func_percent >= 100 && this.done) {
             console.log(text);
-            text.offsetParent.style.display = "none";
+            const par: HTMLParagraphElement = text.offsetParent! as HTMLParagraphElement;
+            par.style.display = "none";
             canvas.style.visibility = "visible";
             console.log(canvas);
             this.animationComplete = true;

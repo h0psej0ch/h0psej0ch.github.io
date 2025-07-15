@@ -1,11 +1,13 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass';
-import { OutlinePass } from 'three/addons/postprocessing/OutlinePass';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment';
+import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
+import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment';
 import { PMREMGenerator } from 'three';
+
+import { loadingScreen } from './loadingScreen';
 
 const BACKGROUND: THREE.Color           = new THREE.Color(0x24273a);
 const MODEL: string                     = "scene.glb"; 
@@ -14,22 +16,22 @@ const IDLE_ANIMATIONS: Array<string>    = ["TurnHead"];
 
 export class threeScene {
     private canvas: HTMLCanvasElement;
-    private camera: THREE.Camera;
+    private camera!: THREE.PerspectiveCamera;
     private raycaster: THREE.Raycaster;
     private mouse: THREE.Vector2;
-    private scene: THREE.Scene;
-    private renderer: THREE.WebGLRenderer;
-    private pmremGenerator: THREE.PMREMGenerator;
-    private mainObject: THREE.Object3D;
-    private outlinePass: OutlinePass;
-    private composer: EffectComposer;
-    private highlightObjects: Array<number>;
-    private animations: Map<string, THREE.AnimationAction>;
-    private mixer: THREE.AnimationMixer;
+    private scene!: THREE.Scene;
+    private renderer!: THREE.WebGLRenderer;
+    private pmremGenerator!: THREE.PMREMGenerator;
+    private mainObject!: THREE.Object3D;
+    private outlinePass!: OutlinePass;
+    private composer!: EffectComposer;
+    private highlightObjects!: Array<number>;
+    private animations!: Map<string, THREE.AnimationAction>;
+    private mixer!: THREE.AnimationMixer;
     private clock: THREE.Clock;
 
     constructor(loading_screen: loadingScreen) {
-        this.canvas = document.getElementById("three-canvas");
+        this.canvas = document.getElementById("three-canvas")! as HTMLCanvasElement;
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
 
@@ -81,7 +83,7 @@ export class threeScene {
         const loader = new GLTFLoader();
         loader.load(
             '/models/' + MODEL,
-            (gltf) => {
+            (gltf: GLTF) => {
                 this.mainObject = gltf.scene;
                 this.mainObject.rotation.y = - Math.PI / 4;
                 //this.mainObject.rotation.z = Math.PI / 2;
@@ -89,9 +91,11 @@ export class threeScene {
                 this.scene.add(this.mainObject);
 
                 this.mixer = new THREE.AnimationMixer(this.mainObject);
-                this.animations = new Map<string, THREE.AnimationAction>(gltf.animations.map((value: THREE.AnimationAction) => [value.name, this.mixer.clipAction(value)]));
+                this.animations = new Map<string, THREE.AnimationAction>(
+                    gltf.animations.map((clip: THREE.AnimationClip) => [clip.name, this.mixer.clipAction(clip)])
+                );
                 console.log(this.animations);
-                const sitDown = this.animations.get("Standup");
+                const sitDown = this.animations.get("Standup")!;
                 sitDown.timeScale = -1;
                 sitDown.clampWhenFinished = true;
                 sitDown.repetitions = 1;
@@ -104,7 +108,7 @@ export class threeScene {
                     if (HIGHLIGHTS.includes(obj.name)) {
                         this.highlightObjects.push(obj.id);
                     }
-                    if (obj.isMesh) {
+                    if (obj instanceof THREE.Mesh) {
                         console.log("hjehe");
                         obj.castShadow = true;
                         obj.receiveShadow = true;
@@ -183,7 +187,7 @@ export class threeScene {
         const delay = 1000 * (Math.random() * 10 + 5)
         setTimeout(() => {
             const anim = IDLE_ANIMATIONS[Math.floor(Math.random() * IDLE_ANIMATIONS.length)]
-            const action = this.animations.get(anim);
+            const action = this.animations.get(anim)!;
             action.repetitions = 1;
             action.reset(); // Reset the action to allow it to play again
             action.play();
@@ -219,7 +223,7 @@ export class threeScene {
         if (obj.parent == this.mainObject) {
             return obj;
         } else {
-            return this.parentObject(obj.parent);
+            return this.parentObject(obj.parent!);
         }
     }
 
