@@ -6,8 +6,10 @@ import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment';
 import { PMREMGenerator } from 'three';
+import { Tween, Easing } from '@tweenjs/tween.js';
 
 import { loadingScreen } from './loadingScreen';
+import { error } from 'console';
 
 const BACKGROUND: THREE.Color           = new THREE.Color(0x24273a);
 const MODEL: string                     = "scene.glb"; 
@@ -17,6 +19,7 @@ const IDLE_ANIMATIONS: Array<string>    = ["TurnHead"];
 export class threeScene {
     private canvas: HTMLCanvasElement;
     private camera!: THREE.PerspectiveCamera;
+    private cameraGroup!: THREE.Group;
     private raycaster: THREE.Raycaster;
     private mouse: THREE.Vector2;
     private scene!: THREE.Scene;
@@ -29,6 +32,7 @@ export class threeScene {
     private animations!: Map<string, THREE.AnimationAction>;
     private mixer!: THREE.AnimationMixer;
     private clock: THREE.Clock;
+    private tweens!: Array<Tween>;
 
     constructor(loading_screen: loadingScreen) {
         this.canvas = document.getElementById("three-canvas")! as HTMLCanvasElement;
@@ -44,12 +48,16 @@ export class threeScene {
     }
 
     private initThreeJS(): void {
+        this.tweens = [];
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.cameraGroup = new THREE.Group();
+        this.cameraGroup.add(this.camera);
+        this.scene.add(this.cameraGroup);
 
         this.camera.position.x = 0;
         this.camera.position.y = 0.5;
-        this.camera.position.z = 1.25;
+        this.camera.position.z = 1.5;
 
         this.camera.rotation.x = - Math.PI / 8;
         
@@ -68,6 +76,17 @@ export class threeScene {
         this.scene.environment = envTexture;
         this.scene.environmentIntensity = 0.3;
 
+        // Skybox
+        const skyboxLoader = new THREE.CubeTextureLoader();
+        this.scene.background = skyboxLoader.load([
+            '/skybox/1.png',
+            '/skybox/3.png',
+            '/skybox/5.png',
+            '/skybox/6.png',
+            '/skybox/2.png',
+            '/skybox/4.png'
+        ])
+
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -85,9 +104,18 @@ export class threeScene {
             '/models/' + MODEL,
             (gltf: GLTF) => {
                 this.mainObject = gltf.scene;
+                const materials: THREE.Material[] = []
+                this.mainObject.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        materials.push(child.material);
+                    }
+                });
                 this.mainObject.rotation.y = - Math.PI / 4;
                 //this.mainObject.rotation.z = Math.PI / 2;
                 //this.mainObject.rotation.x = Math.PI / 2;
+                materials.forEach(element => {
+                    element.transparent = true;
+                });              
                 this.scene.add(this.mainObject);
 
                 this.mixer = new THREE.AnimationMixer(this.mainObject);
@@ -95,6 +123,7 @@ export class threeScene {
                     gltf.animations.map((clip: THREE.AnimationClip) => [clip.name, this.mixer.clipAction(clip)])
                 );
                 console.log(this.animations);
+                const rest = this.animations.get("Plimpoes.001")!;
                 const sitDown = this.animations.get("Standup")!;
                 sitDown.timeScale = -1;
                 sitDown.clampWhenFinished = true;
@@ -128,10 +157,28 @@ export class threeScene {
 
 
                 loading_screen.set_done().then(() => {
-                    console.log("fdsa");
-                    sitDown.play();
-                    this.idleAnimation();
-                    this.animate();
+                    rest.play();
+                    requestAnimationFrame(this.animate);
+                    // Pop scene into play
+                    let popinValues = {scale: 0, opacity: 0} // Start at nothing with no oppacity
+                    const popinTween = new Tween(popinValues)
+                        .to({scale: scale, opacity: 1}, 1000)
+                        .easing(Easing.Quadratic.InOut)
+                        .onUpdate(() => {
+                            this.mainObject.scale.setScalar(popinValues.scale);
+                            materials.forEach(element => {
+                                element.opacity = popinValues.opacity;
+                            });              
+                        })
+                        .start();
+                    this.tweens.push(popinTween);
+
+                    // Start sitdown, and animations after popin
+                    setTimeout(() => {
+                        rest.stop();
+                        sitDown.play();
+                        this.idleAnimation();
+                    }, 800)
                 });
 
             },
@@ -205,7 +252,7 @@ export class threeScene {
 	        this.mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 
 
-            this.mainObject.rotation.y = (- Math.PI / 4) + (this.mouse.x * (Math.PI / 4));
+            this.cameraGroup.rotation.y =  (-this.mouse.x * (Math.PI / 4));
              
             this.raycaster.setFromCamera(this.mouse, this.camera);
 
@@ -239,13 +286,17 @@ export class threeScene {
         });
     }
 
-    private animate = (): void => {
+    private animate = (time: number): void => {
         const delta = this.clock.getDelta();
         
         // Update the animation mixer
         if (this.mixer) {
             this.mixer.update(delta);
         }
+
+        this.tweens.forEach(tw => {
+            tw.update(time);
+        });
         
         this.composer.render();
         requestAnimationFrame(this.animate);
