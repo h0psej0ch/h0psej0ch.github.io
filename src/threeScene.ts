@@ -9,16 +9,21 @@ import { PMREMGenerator } from 'three';
 import { Tween, Easing } from '@tweenjs/tween.js';
 
 import { loadingScreen } from './loadingScreen';
-import { error } from 'console';
+
+const GUITAR: string    = "Guitar"
+const PLIMPOES: string  = "Plimpoes";
+const TREE: string      = "Tree";
+const IBN: string       = "IBN";
 
 const BACKGROUND: THREE.Color           = new THREE.Color(0x24273a);
 const MODEL: string                     = "scene.glb"; 
-const HIGHLIGHTS: Array<string>         = ["Guitar", "Plimpoes", "Tree"];
+const HIGHLIGHTS: Array<string>         = [GUITAR, PLIMPOES, TREE, IBN];
 const IDLE_ANIMATIONS: Array<string>    = ["TurnHead"];
 
 export class threeScene {
     private canvas: HTMLCanvasElement;
     private camera!: THREE.PerspectiveCamera;
+    private cameraMoved!: boolean;
     private cameraGroup!: THREE.Group;
     private raycaster: THREE.Raycaster;
     private mouse: THREE.Vector2;
@@ -44,13 +49,15 @@ export class threeScene {
         this.setupOutline();
         this.onMouseMovement();
         this.onWindowResize();
+        this.onClick();
         this.clock = new THREE.Clock();
     }
 
     private initThreeJS(): void {
         this.tweens = [];
         this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.cameraMoved = false;
         this.cameraGroup = new THREE.Group();
         this.cameraGroup.add(this.camera);
         this.scene.add(this.cameraGroup);
@@ -123,7 +130,7 @@ export class threeScene {
                     gltf.animations.map((clip: THREE.AnimationClip) => [clip.name, this.mixer.clipAction(clip)])
                 );
                 console.log(this.animations);
-                const rest = this.animations.get("Plimpoes.001")!;
+                const rest = this.animations.get("StandRest")!;
                 const sitDown = this.animations.get("Standup")!;
                 sitDown.timeScale = -1;
                 sitDown.clampWhenFinished = true;
@@ -252,7 +259,7 @@ export class threeScene {
 	        this.mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 
 
-            this.cameraGroup.rotation.y =  (-this.mouse.x * (Math.PI / 4));
+            if (!this.cameraMoved) this.cameraGroup.rotation.y =  (-this.mouse.x / 4 * (Math.PI / 4));
              
             this.raycaster.setFromCamera(this.mouse, this.camera);
 
@@ -284,6 +291,43 @@ export class threeScene {
             this.composer.setSize(window.innerWidth, window.innerHeight);
             this.outlinePass.resolution.set(window.innerWidth, window.innerHeight);
         });
+    }
+
+    private onClick() {
+        window.addEventListener('click', (e) => {
+            if (this.outlinePass.selectedObjects.length > 0) {
+                e.preventDefault();
+                let selected: THREE.Mesh = this.outlinePass.selectedObjects[0] as THREE.Mesh;
+                switch (selected.name) {
+                    case GUITAR:
+                        console.log(GUITAR);
+                        break;
+                    case PLIMPOES:
+                        console.log(PLIMPOES);
+                        break;
+                    case TREE:
+                        console.log(TREE);
+                        break;
+                    case IBN:
+                        console.log(IBN);
+                        this.cameraMoved = true;
+                        let cameraTranslation = {px: this.camera.position.x, py: this.camera.position.y, pz: this.camera.position.z, rx: this.camera.rotation.x, ry: this.camera.rotation.y, f: this.camera.getFocalLength(), gry: this.cameraGroup.rotation.y}
+                        let tween = new Tween(cameraTranslation)
+                            .to({px: 0.04, py: 0.13, pz: -0.22, rx: 0, ry: Math.PI / 4, f: 30, gry: 0}, 1000)
+                            .onUpdate(() => {
+                                this.camera.position.x = cameraTranslation.px
+                                this.camera.position.y = cameraTranslation.py
+                                this.camera.position.z = cameraTranslation.pz
+                                this.camera.rotation.x = cameraTranslation.rx
+                                this.camera.rotation.y = cameraTranslation.ry
+                                this.camera.setFocalLength(cameraTranslation.f);
+                                this.cameraGroup.rotation.y = cameraTranslation.gry
+                            }).start();
+                        this.tweens.push(tween);
+                        break;
+                }
+            }
+        })
     }
 
     private animate = (time: number): void => {
