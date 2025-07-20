@@ -1,6 +1,7 @@
 body {
     margin: 0;
     background-color: #24273a;
+    overflow: hidden;
 }
 
 header {
@@ -60,4 +61,43 @@ header {
 
 #loading-percentage {
     color: #a6da95;
+}
+
+.links {
+    position: absolute;
+    bottom: 2.5vh;
+    left: 2.5vh;
+    z-index: 5;
+    cursor: pointer;
+    display: inline-block;
+    width: fit-content;
+}
+
+.link-item {
+    container-type: size;
+    height: 5vh;
+    min-width: 5vh;
+    display: flex;
+    align-items: center;
+    padding-bottom: 1vh;
+}
+
+.logo {
+    width:  5vh;
+    height: 5vh;
+    opacity: 75%;
+}
+
+.logo-text {
+    padding-left: 1vh;
+    color: #ffffffcc;
+    text-align: left;
+    white-space: nowrap;
+}
+
+@container (min-height: 0px) {
+    .logo-text {
+        font-size: 100cqh;
+        line-height: 100cqh;
+    }
 }
