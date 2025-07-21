@@ -19,11 +19,17 @@ const BACKGROUND: THREE.Color           = new THREE.Color(0x24273a);
 const MODEL: string                     = "scene.glb"; 
 const HIGHLIGHTS: Array<string>         = [GUITAR, PLIMPOES, TREE, IBN];
 const IDLE_ANIMATIONS: Array<string>    = ["TurnHead"];
+const CAMERA_BASE: {
+            pos: THREE.Vector3;
+            rot: THREE.Vector3;
+            focal: number;
+            grroty: number;
+        }                               = {pos: new THREE.Vector3(0, 0.5, 1.5), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), focal: 15.114682208599307, grroty: 0}
 
 export class threeScene {
     private canvas: HTMLCanvasElement;
     private camera!: THREE.PerspectiveCamera;
-    private cameraMoved!: boolean;
+    private focussedObject: THREE.Mesh | null = null;
     private cameraGroup!: THREE.Group;
     private raycaster: THREE.Raycaster;
     private mouse: THREE.Vector2;
@@ -31,6 +37,8 @@ export class threeScene {
     private renderer!: THREE.WebGLRenderer;
     private pmremGenerator!: THREE.PMREMGenerator;
     private mainObject!: THREE.Object3D;
+    private materials: THREE.Material[] = [];
+    private materialMap: Map<string, THREE.Material[]> = new Map();
     private outlinePass!: OutlinePass;
     private composer!: EffectComposer;
     private highlightObjects!: Array<number>;
@@ -38,6 +46,7 @@ export class threeScene {
     private mixer!: THREE.AnimationMixer;
     private clock: THREE.Clock;
     private tweens!: Array<Tween>;
+    private cameraMoveTween: Tween | null = null;
 
     constructor(loading_screen: loadingScreen) {
         this.canvas = document.getElementById("three-canvas")! as HTMLCanvasElement;
@@ -57,16 +66,15 @@ export class threeScene {
         this.tweens = [];
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.cameraMoved = false;
         this.cameraGroup = new THREE.Group();
         this.cameraGroup.add(this.camera);
         this.scene.add(this.cameraGroup);
 
-        this.camera.position.x = 0;
-        this.camera.position.y = 0.5;
-        this.camera.position.z = 1.5;
+        this.camera.position.x = CAMERA_BASE.pos.x;
+        this.camera.position.y = CAMERA_BASE.pos.y;
+        this.camera.position.z = CAMERA_BASE.pos.z;
 
-        this.camera.rotation.x = - Math.PI / 8;
+        this.camera.rotation.x = CAMERA_BASE.rot.x;
         
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
@@ -111,16 +119,22 @@ export class threeScene {
             '/models/' + MODEL,
             (gltf: GLTF) => {
                 this.mainObject = gltf.scene;
-                const materials: THREE.Material[] = []
-                this.mainObject.traverse((child) => {
-                    if (child instanceof THREE.Mesh) {
-                        materials.push(child.material);
-                    }
+                this.mainObject.children.forEach((ch) => {
+                    let tempList: THREE.Material[] = [];
+                    ch.traverse((child) => {
+                        if (child instanceof THREE.Mesh) {
+                            tempList.push(child.material)
+                        }
+                    });
+                    this.materials = this.materials.concat(tempList);
+                    this.materialMap.set(ch.name, tempList);
                 });
+                console.log("MATERIALS");
+                console.log(this.materials);
                 this.mainObject.rotation.y = - Math.PI / 4;
                 //this.mainObject.rotation.z = Math.PI / 2;
                 //this.mainObject.rotation.x = Math.PI / 2;
-                materials.forEach(element => {
+                this.materials.forEach(element => {
                     element.transparent = true;
                 });              
                 this.scene.add(this.mainObject);
@@ -173,7 +187,7 @@ export class threeScene {
                         .easing(Easing.Quadratic.InOut)
                         .onUpdate(() => {
                             this.mainObject.scale.setScalar(popinValues.scale);
-                            materials.forEach(element => {
+                            this.materials.forEach(element => {
                                 element.opacity = popinValues.opacity;
                             });              
                         })
@@ -254,22 +268,23 @@ export class threeScene {
     private onMouseMovement(): void {
         
         window.addEventListener('mousemove', (event) => {
+            if (this.focussedObject == null) {
 
-            this.mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-	        this.mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+                this.mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+                this.mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 
 
-            if (!this.cameraMoved) this.cameraGroup.rotation.y =  (-this.mouse.x / 4 * (Math.PI / 4));
-             
-            this.raycaster.setFromCamera(this.mouse, this.camera);
+                this.cameraGroup.rotation.y =  (-this.mouse.x / 4 * (Math.PI / 4));
+                
+                this.raycaster.setFromCamera(this.mouse, this.camera);
 
-            const intersects = this.raycaster.intersectObjects(this.scene.children, true);
-            if (intersects.length > 0) {
-                this.outlinePass.selectedObjects = intersects.map(value => this.parentObject(value.object)).filter(value => this.highlightObjects.includes(value.id));
-            } else {
-                this.outlinePass.selectedObjects = []
+                const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+                if (intersects.length > 0) {
+                    this.outlinePass.selectedObjects = intersects.map(value => this.parentObject(value.object)).filter(value => this.highlightObjects.includes(value.id));
+                } else {
+                    this.outlinePass.selectedObjects = []
+                }
             }
-        
         });
     }
 
@@ -298,6 +313,8 @@ export class threeScene {
             if (this.outlinePass.selectedObjects.length > 0) {
                 e.preventDefault();
                 let selected: THREE.Mesh = this.outlinePass.selectedObjects[0] as THREE.Mesh;
+                this.focussedObject = selected;
+                this.hideAllBut(selected);
                 switch (selected.name) {
                     case GUITAR:
                         console.log(GUITAR);
@@ -310,24 +327,55 @@ export class threeScene {
                         break;
                     case IBN:
                         console.log(IBN);
-                        this.cameraMoved = true;
-                        let cameraTranslation = {px: this.camera.position.x, py: this.camera.position.y, pz: this.camera.position.z, rx: this.camera.rotation.x, ry: this.camera.rotation.y, f: this.camera.getFocalLength(), gry: this.cameraGroup.rotation.y}
-                        let tween = new Tween(cameraTranslation)
-                            .to({px: 0.04, py: 0.13, pz: -0.22, rx: 0, ry: Math.PI / 4, f: 30, gry: 0}, 1000)
-                            .onUpdate(() => {
-                                this.camera.position.x = cameraTranslation.px
-                                this.camera.position.y = cameraTranslation.py
-                                this.camera.position.z = cameraTranslation.pz
-                                this.camera.rotation.x = cameraTranslation.rx
-                                this.camera.rotation.y = cameraTranslation.ry
-                                this.camera.setFocalLength(cameraTranslation.f);
-                                this.cameraGroup.rotation.y = cameraTranslation.gry
-                            }).start();
-                        this.tweens.push(tween);
+                        this.moveCamera({pos: new THREE.Vector3(0.04, 0.13, -0.22), rot: new THREE.Vector3(0, Math.PI / 4, 0), focal: 30, grroty: 0})
                         break;
                 }
             }
         })
+        window.addEventListener('keydown', (e) => {
+            if (e.key == "Escape" && !(this.focussedObject == null)) {
+                this.moveCamera(CAMERA_BASE)
+                this.focussedObject = null;
+                this.materials.forEach((mat) => {
+                    mat.opacity = 1;
+                })
+            }
+        })
+    }
+
+    private moveCamera(
+        target: {
+            pos: THREE.Vector3;
+            rot: THREE.Vector3;
+            focal: number;
+            grroty: number;
+        }): void {
+        console.log(this.camera.getFocalLength())
+        this.cameraMoveTween = null;
+        let cameraTranslation = {pos: this.camera.position, rot: this.camera.rotation, focal: this.camera.getFocalLength(), grroty: this.cameraGroup.rotation.y}
+        let tween = new Tween(cameraTranslation)
+            .to(target, 1000)
+            .onUpdate(() => {
+                this.camera.position.x = cameraTranslation.pos.x
+                this.camera.position.y = cameraTranslation.pos.y
+                this.camera.position.z = cameraTranslation.pos.z
+                this.camera.rotation.x = cameraTranslation.rot.x
+                this.camera.rotation.y = cameraTranslation.rot.y
+                this.camera.rotation.z = cameraTranslation.rot.z
+                this.camera.setFocalLength(cameraTranslation.focal);
+                this.cameraGroup.rotation.y = cameraTranslation.grroty
+            }).start();
+        this.cameraMoveTween = tween;
+    }
+
+    private hideAllBut(mesh: THREE.Mesh): void {
+        console.log(mesh.name);
+        console.log(this.materialMap.get(mesh.name));
+        console.log(this.materials);
+        (this.materials.filter((mat) => !(this.materialMap.get(mesh.name)?.includes(mat)))).forEach(element => {
+            console.log(element);
+            element.opacity = 0;
+        });
     }
 
     private animate = (time: number): void => {
@@ -341,6 +389,10 @@ export class threeScene {
         this.tweens.forEach(tw => {
             tw.update(time);
         });
+
+        if (this.cameraMoveTween != null) {
+            this.cameraMoveTween.update(time);
+        }
         
         this.composer.render();
         requestAnimationFrame(this.animate);
