@@ -22,9 +22,10 @@ const IDLE_ANIMATIONS: Array<string>    = ["TurnHead"];
 const CAMERA_BASE: {
             pos: THREE.Vector3;
             rot: THREE.Vector3;
-            focal: number;
+            zoom: number;
             grroty: number;
-        }                               = {pos: new THREE.Vector3(0, 0.5, 1.5), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), focal: 15.114682208599307, grroty: 0}
+        }                               = {pos: new THREE.Vector3(0, 1.75, 3.5), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), zoom: 1, grroty: Math.PI / 4}
+        // }                               = {pos: new THREE.Vector3(0, 0.5, 2), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), zoom: 1, grroty: Math.PI / 4}
 
 export class threeScene {
     private canvas: HTMLCanvasElement;
@@ -47,6 +48,7 @@ export class threeScene {
     private clock: THREE.Clock;
     private tweens!: Array<Tween>;
     private cameraMoveTween: Tween | null = null;
+    private cameraTweenStartTime: number = 0;
 
     constructor(loading_screen: loadingScreen) {
         this.canvas = document.getElementById("three-canvas")! as HTMLCanvasElement;
@@ -65,6 +67,10 @@ export class threeScene {
     private initThreeJS(): void {
         this.tweens = [];
         this.scene = new THREE.Scene();
+
+        // const axesHelper = new THREE.AxesHelper( 5 );
+        // this.scene.add( axesHelper );
+
         this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.cameraGroup = new THREE.Group();
         this.cameraGroup.add(this.camera);
@@ -75,6 +81,7 @@ export class threeScene {
         this.camera.position.z = CAMERA_BASE.pos.z;
 
         this.camera.rotation.x = CAMERA_BASE.rot.x;
+        this.cameraGroup.rotation.y = CAMERA_BASE.grroty
         
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
@@ -167,14 +174,7 @@ export class threeScene {
 
                 console.log(this.highlightObjects);
 
-                // Center and scale the model
-                const box = new THREE.Box3().setFromObject(this.mainObject);
-                const center = box.getCenter(new THREE.Vector3());
-                const size = box.getSize(new THREE.Vector3());
-                const maxDim = Math.max(size.x, size.y, size.z);
-                const scale = 2 / maxDim;
-                this.mainObject.scale.setScalar(scale);
-                this.mainObject.position.sub(center.multiplyScalar(scale));
+                this.mainObject.rotation.y = 0;
 
 
                 loading_screen.set_done().then(() => {
@@ -183,7 +183,7 @@ export class threeScene {
                     // Pop scene into play
                     let popinValues = {scale: 0, opacity: 0} // Start at nothing with no oppacity
                     const popinTween = new Tween(popinValues)
-                        .to({scale: scale, opacity: 1}, 1000)
+                        .to({scale: 1, opacity: 1}, 1000)
                         .easing(Easing.Quadratic.InOut)
                         .onUpdate(() => {
                             this.mainObject.scale.setScalar(popinValues.scale);
@@ -274,7 +274,7 @@ export class threeScene {
                 this.mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 
 
-                this.cameraGroup.rotation.y =  (-this.mouse.x / 4 * (Math.PI / 4));
+                this.cameraGroup.rotation.y = (1-(this.mouse.x / 4)) * (Math.PI / 4);
                 
                 this.raycaster.setFromCamera(this.mouse, this.camera);
 
@@ -310,7 +310,7 @@ export class threeScene {
 
     private onClick() {
         window.addEventListener('click', (e) => {
-            if (this.outlinePass.selectedObjects.length > 0) {
+            if (this.outlinePass.selectedObjects.length > 0 && this.focussedObject == null) {
                 e.preventDefault();
                 let selected: THREE.Mesh = this.outlinePass.selectedObjects[0] as THREE.Mesh;
                 this.focussedObject = selected;
@@ -318,27 +318,27 @@ export class threeScene {
                 switch (selected.name) {
                     case GUITAR:
                         console.log(GUITAR);
+                        this.moveCamera({pos: new THREE.Vector3(1.31928, 1.25, 1.25), rot: new THREE.Vector3(0, 0, 0), zoom: 1, grroty: 0})
                         break;
                     case PLIMPOES:
                         console.log(PLIMPOES);
                         break;
                     case TREE:
                         console.log(TREE);
+                        this.moveCamera({pos: new THREE.Vector3(0.8,1.05,1.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0})  
                         break;
                     case IBN:
                         console.log(IBN);
-                        this.moveCamera({pos: new THREE.Vector3(0.04, 0.13, -0.22), rot: new THREE.Vector3(0, Math.PI / 4, 0), focal: 30, grroty: 0})
+                        this.moveCamera({pos: new THREE.Vector3(0.55, 1.2, 0.7), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 2, grroty: 0})
                         break;
                 }
             }
         })
         window.addEventListener('keydown', (e) => {
             if (e.key == "Escape" && !(this.focussedObject == null)) {
-                this.moveCamera(CAMERA_BASE)
+                this.hideAllBut(this.focussedObject, true)
                 this.focussedObject = null;
-                this.materials.forEach((mat) => {
-                    mat.opacity = 1;
-                })
+                this.moveCamera(CAMERA_BASE)
             }
         })
     }
@@ -347,35 +347,42 @@ export class threeScene {
         target: {
             pos: THREE.Vector3;
             rot: THREE.Vector3;
-            focal: number;
+            zoom: number;
             grroty: number;
         }): void {
-        console.log(this.camera.getFocalLength())
+
+        // Calculate remaining time if tween is already running
+        const time = this.cameraMoveTween == null ? 1000 : 1000 - (this.cameraMoveTween.getDuration() - (Date.now() - this.cameraTweenStartTime));
+        
         this.cameraMoveTween = null;
-        let cameraTranslation = {pos: this.camera.position, rot: this.camera.rotation, focal: this.camera.getFocalLength(), grroty: this.cameraGroup.rotation.y}
+        this.cameraTweenStartTime = Date.now();
+        
+        let cameraTranslation = {pos: this.camera.position, rot: this.camera.rotation, zoom: this.camera.zoom, grroty: this.cameraGroup.rotation.y}
         let tween = new Tween(cameraTranslation)
-            .to(target, 1000)
+            .to(target, time)
             .onUpdate(() => {
-                this.camera.position.x = cameraTranslation.pos.x
-                this.camera.position.y = cameraTranslation.pos.y
-                this.camera.position.z = cameraTranslation.pos.z
-                this.camera.rotation.x = cameraTranslation.rot.x
-                this.camera.rotation.y = cameraTranslation.rot.y
-                this.camera.rotation.z = cameraTranslation.rot.z
-                this.camera.setFocalLength(cameraTranslation.focal);
+                this.camera.zoom = cameraTranslation.zoom;
                 this.cameraGroup.rotation.y = cameraTranslation.grroty
-            }).start();
+                this.camera.updateProjectionMatrix();
+            })
+            .onComplete(() => {
+                this.cameraMoveTween = null;
+            })
+            .start();
         this.cameraMoveTween = tween;
     }
 
-    private hideAllBut(mesh: THREE.Mesh): void {
-        console.log(mesh.name);
-        console.log(this.materialMap.get(mesh.name));
-        console.log(this.materials);
-        (this.materials.filter((mat) => !(this.materialMap.get(mesh.name)?.includes(mat)))).forEach(element => {
-            console.log(element);
-            element.opacity = 0;
-        });
+    private hideAllBut(mesh: THREE.Mesh, show: boolean = false): void {
+        let materials = this.materials.filter((mat) => !(this.materialMap.get(mesh.name)?.includes(mat)));
+        let opacity = {op: show ? 0 : 1};
+        let hideTween = new Tween(opacity)
+            .to({op: 1 - opacity.op}, 1000)
+            .onUpdate(() => materials.forEach(element => {
+                element.opacity = opacity.op;
+            }))
+            .delay(1000)
+            .start();
+        this.tweens.push(hideTween);
     }
 
     private animate = (time: number): void => {
