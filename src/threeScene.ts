@@ -10,21 +10,24 @@ import { Tween, Easing } from '@tweenjs/tween.js';
 
 import { loadingScreen } from './loadingScreen';
 
-const GUITAR: string    = "Guitar"
-const PLIMPOES: string  = "Plimpoes";
-const TREE: string      = "Tree";
-const IBN: string       = "IBN";
+const GUITAR: string        = "Guitar"
+const PLIMPOES: string      = "Plimpoes";
+const TREE: string          = "Tree";
+const IBN: string           = "IBN";
+const CELESTE: string       = "Berry"
+const TRACKFIELD: string    = "T&F"
 
 const BACKGROUND: THREE.Color           = new THREE.Color(0x24273a);
 const MODEL: string                     = "scene.glb"; 
-const HIGHLIGHTS: Array<string>         = [GUITAR, PLIMPOES, TREE, IBN];
+const HIGHLIGHTS: Array<string>         = [GUITAR, PLIMPOES, TREE, IBN, CELESTE, TRACKFIELD];
 const IDLE_ANIMATIONS: Array<string>    = ["TurnHead"];
 const CAMERA_BASE: {
             pos: THREE.Vector3;
             rot: THREE.Vector3;
             zoom: number;
             grroty: number;
-        }                               = {pos: new THREE.Vector3(0, 1.75, 3.5), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), zoom: 1, grroty: Math.PI / 4}
+            sceneWidthFactor: number;
+        }                               = {pos: new THREE.Vector3(0, 1.75, 3.5), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), zoom: 1, grroty: Math.PI / 4, sceneWidthFactor: 1}
         // }                               = {pos: new THREE.Vector3(0, 0.5, 2), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), zoom: 1, grroty: Math.PI / 4}
 
 export class threeScene {
@@ -41,6 +44,7 @@ export class threeScene {
     private materials: THREE.Material[] = [];
     private materialMap: Map<string, THREE.Material[]> = new Map();
     private outlinePass!: OutlinePass;
+    private celestePass!: OutlinePass;
     private composer!: EffectComposer;
     private highlightObjects!: Array<number>;
     private animations!: Map<string, THREE.AnimationAction>;
@@ -49,6 +53,7 @@ export class threeScene {
     private tweens!: Array<Tween>;
     private cameraMoveTween: Tween | null = null;
     private cameraTweenStartTime: number = 0;
+    private sceneWidthFactor: number = 1;
 
     constructor(loading_screen: loadingScreen) {
         this.canvas = document.getElementById("three-canvas")! as HTMLCanvasElement;
@@ -127,6 +132,9 @@ export class threeScene {
             (gltf: GLTF) => {
                 this.mainObject = gltf.scene;
                 this.mainObject.children.forEach((ch) => {
+                    if (ch.name === "Berry") {
+                        this.celestePass.selectedObjects.push(ch);
+                    }
                     let tempList: THREE.Material[] = [];
                     ch.traverse((child) => {
                         if (child instanceof THREE.Mesh) {
@@ -150,8 +158,10 @@ export class threeScene {
                 this.animations = new Map<string, THREE.AnimationAction>(
                     gltf.animations.map((clip: THREE.AnimationClip) => [clip.name, this.mixer.clipAction(clip)])
                 );
+                console.log("ANIMATIONS")
                 console.log(this.animations);
                 const rest = this.animations.get("StandRest")!;
+                console.log(rest);
                 const sitDown = this.animations.get("Standup")!;
                 sitDown.timeScale = -1;
                 sitDown.clampWhenFinished = true;
@@ -220,6 +230,7 @@ export class threeScene {
         // Setup composer/renderPass
         this.composer = new EffectComposer(this.renderer);
         const renderPass = new RenderPass(this.scene, this.camera);
+        
         this.composer.addPass(renderPass);
 
         // OutlinePass for the outline on highlighted objects
@@ -228,12 +239,27 @@ export class threeScene {
             this.scene,
             this.camera
         );
-        this.outlinePass.edgeStrength = 2;
+        this.outlinePass.edgeStrength = 5;
         this.outlinePass.edgeGlow = 1;
         this.outlinePass.edgeThickness = 1;
         this.outlinePass.pulsePeriod = 0;
         this.outlinePass.visibleEdgeColor.set('#ffffff');
+
+        this.celestePass = new OutlinePass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            this.scene,
+            this.camera
+        );
+        this.celestePass.edgeStrength = 10;
+        this.celestePass.edgeThickness = 5;
+        this.celestePass.visibleEdgeColor.set('#000000');
+        this.celestePass.hiddenEdgeColor.set('#000000');
+        this.celestePass.edgeGlow = 0;
+        this.celestePass.overlayMaterial.blending = THREE.NormalBlending;
+
         this.composer.addPass(this.outlinePass);
+        this.composer.addPass(this.celestePass);
+
 
         // OutputPass
         const outputPass = new OutputPass();
@@ -296,19 +322,23 @@ export class threeScene {
         }
     }
 
-    private onWindowResize() {
-        window.addEventListener('resize', () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
-            this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
-            
-            // Update effect composer and outline pass size
-            this.composer.setSize(window.innerWidth, window.innerHeight);
-            this.outlinePass.resolution.set(window.innerWidth, window.innerHeight);
-        });
+    private onWindowResize(): void {
+        console.log("THISS")
+        console.log(this);
+        window.addEventListener('resize', this.resize_function.bind(this));
     }
 
-    private onClick() {
+    private resize_function(): void {
+        this.camera.aspect = this.sceneWidthFactor * window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(this.sceneWidthFactor * window.innerWidth, window.innerHeight);
+        
+        // Update effect composer and outline pass size
+        this.composer.setSize(this.sceneWidthFactor * window.innerWidth, window.innerHeight);
+        this.outlinePass.resolution.set(this.sceneWidthFactor * window.innerWidth, window.innerHeight);
+    }
+
+    private onClick(): void {
         window.addEventListener('click', (e) => {
             if (this.outlinePass.selectedObjects.length > 0 && this.focussedObject == null) {
                 e.preventDefault();
@@ -318,18 +348,39 @@ export class threeScene {
                 switch (selected.name) {
                     case GUITAR:
                         console.log(GUITAR);
-                        this.moveCamera({pos: new THREE.Vector3(1.31928, 1.25, 1.25), rot: new THREE.Vector3(0, 0, 0), zoom: 1, grroty: 0})
+                        this.moveCamera({pos: new THREE.Vector3(1.31928, 1.25, 1.25), rot: new THREE.Vector3(0, 0, 0), zoom: 1, grroty: 0, sceneWidthFactor: 0.5})
+                        let widthObj = { factor: this.sceneWidthFactor };
+                        let widthTween = new Tween(widthObj)
+                            .to({ factor: 0.5 }, 1000)
+                            .onUpdate(() => {
+                                this.sceneWidthFactor = widthObj.factor;
+                                this.canvas.style.width = widthObj.factor * window.innerWidth  + "px";
+                                this.camera.aspect = widthObj.factor * window.innerWidth / window.innerHeight;
+                            })
+                            .start();
+                        // this.tweens.push(widthTween);
+                        console.log(this.canvas.style.left);
+                        // this.canvas.style.left = (- window.innerWidth / 2) + "px";
+                        console.log(this.canvas.style.left);
                         break;
                     case PLIMPOES:
                         console.log(PLIMPOES);
                         break;
                     case TREE:
                         console.log(TREE);
-                        this.moveCamera({pos: new THREE.Vector3(0.8,1.05,1.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0})  
+                        this.moveCamera({pos: new THREE.Vector3(0.8,1.05,1.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1})  
                         break;
                     case IBN:
                         console.log(IBN);
-                        this.moveCamera({pos: new THREE.Vector3(0.55, 1.2, 0.7), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 2, grroty: 0})
+                        this.moveCamera({pos: new THREE.Vector3(0.55, 1.2, 0.7), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 2, grroty: 0, sceneWidthFactor: 1})
+                        break;
+                    case CELESTE:
+                        console.log(CELESTE)
+                        this.moveCamera({pos: new THREE.Vector3(1, 1.7, 1.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1})
+                        break;
+                    case TRACKFIELD:
+                        console.log(TRACKFIELD)
+                        this.moveCamera({pos: new THREE.Vector3(0.7, 1.7, 0.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1})
                         break;
                 }
             }
@@ -349,7 +400,10 @@ export class threeScene {
             rot: THREE.Vector3;
             zoom: number;
             grroty: number;
+            sceneWidthFactor: number;
         }): void {
+
+        console.log(target)
 
         // Calculate remaining time if tween is already running
         const time = this.cameraMoveTween == null ? 1000 : 1000 - (this.cameraMoveTween.getDuration() - (Date.now() - this.cameraTweenStartTime));
@@ -357,12 +411,14 @@ export class threeScene {
         this.cameraMoveTween = null;
         this.cameraTweenStartTime = Date.now();
         
-        let cameraTranslation = {pos: this.camera.position, rot: this.camera.rotation, zoom: this.camera.zoom, grroty: this.cameraGroup.rotation.y}
+        let cameraTranslation = {pos: this.camera.position, rot: this.camera.rotation, zoom: this.camera.zoom, grroty: this.cameraGroup.rotation.y, sceneWidthFactor: this.sceneWidthFactor}
         let tween = new Tween(cameraTranslation)
             .to(target, time)
             .onUpdate(() => {
                 this.camera.zoom = cameraTranslation.zoom;
-                this.cameraGroup.rotation.y = cameraTranslation.grroty
+                this.cameraGroup.rotation.y = cameraTranslation.grroty;
+                this.sceneWidthFactor = cameraTranslation.sceneWidthFactor;
+                this.resize_function();
                 this.camera.updateProjectionMatrix();
             })
             .onComplete(() => {
@@ -380,7 +436,7 @@ export class threeScene {
             .onUpdate(() => materials.forEach(element => {
                 element.opacity = opacity.op;
             }))
-            .delay(1000)
+            .delay(show ? 0 : 1000)
             .start();
         this.tweens.push(hideTween);
     }

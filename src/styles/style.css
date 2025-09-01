@@ -17,7 +17,7 @@ header {
 
 #three-canvas {
     height: 100vh !important;
-    width: 100vw !important;
+    /* width: 100vw !important; */
     position: absolute;
     top: 0;
     left: 0;
