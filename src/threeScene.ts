@@ -139,19 +139,20 @@ export class threeScene {
                     ch.traverse((child) => {
                         if (child instanceof THREE.Mesh) {
                             tempList.push(child.material)
+                            child.material.transparent = true;
                         }
                     });
-                    this.materials = this.materials.concat(tempList);
+                    if (!(ch.name === "Human1" || ch.name == "Human2")) {
+                        this.materials = this.materials.concat(tempList);
+                    }
                     this.materialMap.set(ch.name, tempList);
                 });
                 console.log("MATERIALS");
                 console.log(this.materials);
+                console.log(this.materialMap);
                 this.mainObject.rotation.y = - Math.PI / 4;
                 //this.mainObject.rotation.z = Math.PI / 2;
-                //this.mainObject.rotation.x = Math.PI / 2;
-                this.materials.forEach(element => {
-                    element.transparent = true;
-                });              
+                //this.mainObject.rotation.x = Math.PI / 2;          
                 this.scene.add(this.mainObject);
 
                 this.mixer = new THREE.AnimationMixer(this.mainObject);
@@ -342,6 +343,7 @@ export class threeScene {
         window.addEventListener('click', (e) => {
             if (this.outlinePass.selectedObjects.length > 0 && this.focussedObject == null) {
                 e.preventDefault();
+                this.outlinePass.enabled = false;
                 let selected: THREE.Mesh = this.outlinePass.selectedObjects[0] as THREE.Mesh;
                 this.focussedObject = selected;
                 this.hideAllBut(selected);
@@ -380,7 +382,22 @@ export class threeScene {
                         break;
                     case TRACKFIELD:
                         console.log(TRACKFIELD)
-                        this.moveCamera({pos: new THREE.Vector3(0.7, 1.7, 0.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1})
+                        const hurdle = this.animations.get("Hurdle")!;
+                        hurdle.clampWhenFinished = true;
+                        hurdle.repetitions = 1;
+                        hurdle.play();
+                        const jump = this.animations.get("HighJump")!;
+                        jump.clampWhenFinished = true;
+                        jump.repetitions = 1;
+                        jump.play();
+                        this.moveCamera({pos: new THREE.Vector3(0.7, 1.7, 0.4), rot: new THREE.Vector3(-Math.PI / 12, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1})
+                        this.materialMap.get("Human1")?.forEach((element) => {
+                            element.opacity = 1;
+                        });
+                        
+                        this.materialMap.get("Human2")?.forEach((element) => {
+                            element.opacity = 1;
+                        });
                         break;
                 }
             }
@@ -390,6 +407,7 @@ export class threeScene {
                 this.hideAllBut(this.focussedObject, true)
                 this.focussedObject = null;
                 this.moveCamera(CAMERA_BASE)
+                this.outlinePass.enabled = true;
             }
         })
     }
@@ -405,15 +423,21 @@ export class threeScene {
 
         console.log(target)
 
+
+        const tweenTarget = {
+            ... target,
+            rot: new THREE.Quaternion().setFromEuler(new THREE.Euler(target.rot.x, target.rot.y, target.rot.z, 'YXZ'))
+        };
+
         // Calculate remaining time if tween is already running
         const time = this.cameraMoveTween == null ? 1000 : 1000 - (this.cameraMoveTween.getDuration() - (Date.now() - this.cameraTweenStartTime));
         
         this.cameraMoveTween = null;
         this.cameraTweenStartTime = Date.now();
         
-        let cameraTranslation = {pos: this.camera.position, rot: this.camera.rotation, zoom: this.camera.zoom, grroty: this.cameraGroup.rotation.y, sceneWidthFactor: this.sceneWidthFactor}
+        let cameraTranslation = {pos: this.camera.position, rot: this.camera.quaternion, zoom: this.camera.zoom, grroty: this.cameraGroup.rotation.y, sceneWidthFactor: this.sceneWidthFactor}
         let tween = new Tween(cameraTranslation)
-            .to(target, time)
+            .to(tweenTarget, time)
             .onUpdate(() => {
                 this.camera.zoom = cameraTranslation.zoom;
                 this.cameraGroup.rotation.y = cameraTranslation.grroty;
@@ -423,6 +447,7 @@ export class threeScene {
             })
             .onComplete(() => {
                 this.cameraMoveTween = null;
+                console.log(this.camera.rotation);
             })
             .start();
         this.cameraMoveTween = tween;
@@ -439,6 +464,7 @@ export class threeScene {
             .delay(show ? 0 : 1000)
             .start();
         this.tweens.push(hideTween);
+        this.materialMap.get(mesh.name)!.forEach((element) => element.transparent = show);
     }
 
     private animate = (time: number): void => {
