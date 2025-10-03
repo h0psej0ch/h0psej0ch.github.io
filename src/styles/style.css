@@ -17,10 +17,8 @@ header {
 
 #three-canvas {
     height: 100vh !important;
-    /* width: 100vw !important; */
     position: absolute;
     top: 0;
-    left: 0;
     z-index: 1;
     visibility: hidden;
 }
@@ -101,3 +99,29 @@ header {
         line-height: 100cqh;
     }
 }
+
+.guitar-text {
+    width: 50vw;
+    height: 100vh;
+    left: 50vw;
+    top: 0;
+    position: relative;
+    z-index: 3;
+}
+
+#guitar-text-box {
+    outline: solid white;
+    position: relative;
+    top: 50vh;
+    height: 0vh;
+    width: 0vw;
+    left: 25vw;
+    border-radius: 1vh;
+    transition: 0.75s linear;
+    opacity: 0;
+}
+
+/* #guitar-text-box:hover {
+    height: 80vh;
+    top: 10vh;
+} */

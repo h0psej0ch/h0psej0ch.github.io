@@ -17,6 +17,8 @@ const IBN: string           = "IBN";
 const CELESTE: string       = "Berry"
 const TRACKFIELD: string    = "T&F"
 
+enum Side {Left, Right, Ignore}
+
 const BACKGROUND: THREE.Color           = new THREE.Color(0x24273a);
 const MODEL: string                     = "scene.glb"; 
 const HIGHLIGHTS: Array<string>         = [GUITAR, PLIMPOES, TREE, IBN, CELESTE, TRACKFIELD];
@@ -27,7 +29,8 @@ const CAMERA_BASE: {
             zoom: number;
             grroty: number;
             sceneWidthFactor: number;
-        }                               = {pos: new THREE.Vector3(0, 1.75, 3.5), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), zoom: 1, grroty: Math.PI / 4, sceneWidthFactor: 1}
+            side: Side;
+        }                               = {pos: new THREE.Vector3(0, 1.75, 3.5), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), zoom: 1, grroty: Math.PI / 4, sceneWidthFactor: 1, side: Side.Ignore}
         // }                               = {pos: new THREE.Vector3(0, 0.5, 2), rot: new THREE.Vector3(- Math.PI / 8, 0, 0), zoom: 1, grroty: Math.PI / 4}
 
 export class threeScene {
@@ -52,8 +55,10 @@ export class threeScene {
     private clock: THREE.Clock;
     private tweens!: Array<Tween>;
     private cameraMoveTween: Tween | null = null;
+    private hideTween: Tween | null = null;
     private cameraTweenStartTime: number = 0;
     private sceneWidthFactor: number = 1;
+    private side: Side = Side.Left;
 
     constructor(loading_screen: loadingScreen) {
         this.canvas = document.getElementById("three-canvas")! as HTMLCanvasElement;
@@ -324,12 +329,22 @@ export class threeScene {
     }
 
     private onWindowResize(): void {
-        console.log("THISS")
-        console.log(this);
         window.addEventListener('resize', this.resize_function.bind(this));
     }
 
     private resize_function(): void {
+        switch (this.side) {
+            case Side.Left: 
+                this.canvas.style.left = '0';
+                this.canvas.style.right = '';
+                console.log(this.canvas.style)
+                break;
+            case Side.Right:
+                this.canvas.style.left = '';
+                this.canvas.style.right = '0';
+                console.log(this.canvas.style)
+                break;
+        }
         this.camera.aspect = this.sceneWidthFactor * window.innerWidth / window.innerHeight;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(this.sceneWidthFactor * window.innerWidth, window.innerHeight);
@@ -350,47 +365,37 @@ export class threeScene {
                 switch (selected.name) {
                     case GUITAR:
                         console.log(GUITAR);
-                        this.moveCamera({pos: new THREE.Vector3(1.31928, 1.25, 1.25), rot: new THREE.Vector3(0, 0, 0), zoom: 1, grroty: 0, sceneWidthFactor: 0.5})
-                        let widthObj = { factor: this.sceneWidthFactor };
-                        let widthTween = new Tween(widthObj)
-                            .to({ factor: 0.5 }, 1000)
-                            .onUpdate(() => {
-                                this.sceneWidthFactor = widthObj.factor;
-                                this.canvas.style.width = widthObj.factor * window.innerWidth  + "px";
-                                this.camera.aspect = widthObj.factor * window.innerWidth / window.innerHeight;
-                            })
-                            .start();
-                        // this.tweens.push(widthTween);
-                        console.log(this.canvas.style.left);
-                        // this.canvas.style.left = (- window.innerWidth / 2) + "px";
-                        console.log(this.canvas.style.left);
+                        this.moveCamera({pos: new THREE.Vector3(1.31928, 1.25, 1.25), rot: new THREE.Vector3(0, 0, 0), zoom: 1, grroty: 0, sceneWidthFactor: 0.5, side: Side.Left})
+                        this.showGuitarText();
                         break;
                     case PLIMPOES:
                         console.log(PLIMPOES);
                         break;
                     case TREE:
                         console.log(TREE);
-                        this.moveCamera({pos: new THREE.Vector3(0.8,1.05,1.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1})  
+                        this.moveCamera({pos: new THREE.Vector3(0.8,1.05,1.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1, side: Side.Left})  
                         break;
                     case IBN:
                         console.log(IBN);
-                        this.moveCamera({pos: new THREE.Vector3(0.55, 1.2, 0.7), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 2, grroty: 0, sceneWidthFactor: 1})
+                        this.moveCamera({pos: new THREE.Vector3(0.55, 1.2, 0.7), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 2, grroty: 0, sceneWidthFactor: 1, side: Side.Ignore})
                         break;
                     case CELESTE:
                         console.log(CELESTE)
-                        this.moveCamera({pos: new THREE.Vector3(1, 1.7, 1.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1})
+                        this.moveCamera({pos: new THREE.Vector3(1, 1.7, 1.4), rot: new THREE.Vector3(0, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1, side: Side.Left})
                         break;
                     case TRACKFIELD:
                         console.log(TRACKFIELD)
                         const hurdle = this.animations.get("Hurdle")!;
                         hurdle.clampWhenFinished = true;
                         hurdle.repetitions = 1;
+                        hurdle.stop();
                         hurdle.play();
                         const jump = this.animations.get("HighJump")!;
                         jump.clampWhenFinished = true;
                         jump.repetitions = 1;
+                        jump.stop();
                         jump.play();
-                        this.moveCamera({pos: new THREE.Vector3(0.7, 1.7, 0.4), rot: new THREE.Vector3(-Math.PI / 12, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 1})
+                        this.moveCamera({pos: new THREE.Vector3(0.7, 1.7, 0.4), rot: new THREE.Vector3(-Math.PI / 12, Math.PI / 2, 0), zoom: 1, grroty: 0, sceneWidthFactor: 0.5, side: Side.Right})
                         this.materialMap.get("Human1")?.forEach((element) => {
                             element.opacity = 1;
                         });
@@ -405,8 +410,8 @@ export class threeScene {
         window.addEventListener('keydown', (e) => {
             if (e.key == "Escape" && !(this.focussedObject == null)) {
                 this.hideAllBut(this.focussedObject, true)
+                this.finishAnimate(this.focussedObject);
                 this.focussedObject = null;
-                this.moveCamera(CAMERA_BASE)
                 this.outlinePass.enabled = true;
             }
         })
@@ -419,9 +424,12 @@ export class threeScene {
             zoom: number;
             grroty: number;
             sceneWidthFactor: number;
+            side: Side;
         }): void {
 
         console.log(target)
+
+        this.side = target.side;
 
 
         const tweenTarget = {
@@ -455,16 +463,57 @@ export class threeScene {
 
     private hideAllBut(mesh: THREE.Mesh, show: boolean = false): void {
         let materials = this.materials.filter((mat) => !(this.materialMap.get(mesh.name)?.includes(mat)));
-        let opacity = {op: show ? 0 : 1};
-        let hideTween = new Tween(opacity)
-            .to({op: 1 - opacity.op}, 1000)
+        let opacity = {op: materials[0].opacity}
+        this.hideTween = new Tween(opacity)
+            .to({op: show ? 1 : 0}, 1000)
             .onUpdate(() => materials.forEach(element => {
                 element.opacity = opacity.op;
             }))
             .delay(show ? 0 : 1000)
             .start();
-        this.tweens.push(hideTween);
-        this.materialMap.get(mesh.name)!.forEach((element) => element.transparent = show);
+    }
+
+    private finishAnimate(obj: THREE.Mesh) {
+        switch (obj.name) {
+            case TRACKFIELD:
+                const hurdle = this.animations.get("HurdleFinish")!;
+                hurdle.repetitions = 1;
+                hurdle.stop();
+                hurdle.play();
+                const jump = this.animations.get("HighJumpFinish")!;
+                jump.repetitions = 1;
+                jump.stop();
+                jump.play();
+                let opacity = {op: 1};
+                let materials: THREE.Material[] = this.materialMap.get("Human1")!.concat(this.materialMap.get("Human2")!)
+                let humanTween = new Tween(opacity)
+                    .to({op: 0}, 2000)
+                    .onUpdate(() => {materials.forEach(el => {
+                        el.opacity = opacity.op; 
+                    })})
+                    .start();
+                this.tweens.push(humanTween);
+                setTimeout(() => {this.moveCamera(CAMERA_BASE)}, 750);
+                break;
+            default:
+                this.moveCamera(CAMERA_BASE)
+                break;
+        }
+    }
+
+    private showGuitarText(): void {
+        const box = document.getElementById('guitar-text-box')!;
+        setTimeout(() => {
+            box.style.width = "40vw";
+            box.style.left = "5vw";
+            setTimeout(() => {
+                box.style.height = "90vh";
+                box.style.top = "5vh";
+            }, 1000)
+        }, 1500)
+        setTimeout(() => {
+            box.style.opacity = "100";
+        }, 1000)
     }
 
     private animate = (time: number): void => {
@@ -481,6 +530,10 @@ export class threeScene {
 
         if (this.cameraMoveTween != null) {
             this.cameraMoveTween.update(time);
+        }
+
+        if (this.hideTween != null) {
+            this.hideTween.update(time);
         }
         
         this.composer.render();
